@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/VaultHistory.Notification.Application/VaultHistory.Notification.Application.csproj" />
+    <Project Path="src/VaultHistory.Notification.Domain/VaultHistory.Notification.Domain.csproj" />
+    <Project Path="src/VaultHistory.Notification.Infrastructure/VaultHistory.Notification.Infrastructure.csproj" />
+    <Project Path="src/VaultHistory.Notification.Worker/VaultHistory.Notification.Worker.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/VaultHistory.Notification.Application.UnitTests/VaultHistory.Notification.Application.UnitTests.csproj" />
+    <Project Path="tests/VaultHistory.Notification.Infrastructure.IntegrationTests/VaultHistory.Notification.Infrastructure.IntegrationTests.csproj" />
+  </Folder>
+</Solution>
