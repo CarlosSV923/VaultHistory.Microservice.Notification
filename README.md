@@ -19,6 +19,8 @@ The transport awaits broker confirmation when publishing. A consumer retries a f
 
 The typed History client sends a POST to `History__SubscriptionPath` with the literal `History__AuthorizationToken` header and reads `{ "history": "..." }`. It does not retry the POST automatically: a successful request persists generated content in History, and a retry without an idempotency key could create a duplicate story.
 
+Gmail delivery is configured through OAuth refresh-token secrets and sends only with the `gmail.send` scope. The worker does not prompt for OAuth at startup. See [Gmail OAuth setup](docs/gmail-oauth.md) before adding credentials.
+
 ## Commands
 
 ```powershell
