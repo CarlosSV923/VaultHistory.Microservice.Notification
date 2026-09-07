@@ -18,5 +18,6 @@
 
   <ItemGroup>
     <Content Update="Configurations/appsettings*.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Templates/**/*.liquid" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

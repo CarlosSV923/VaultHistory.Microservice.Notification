@@ -9,4 +9,5 @@ public sealed class TemplatesOptions
     [Required] public string HistoryTemplatePath { get; init; } = string.Empty;
     [Required] public string SignInTemplatePath { get; init; } = string.Empty;
     [Required] public string WelcomeTemplatePath { get; init; } = string.Empty;
+    [Required] public string TimeZoneId { get; init; } = "America/Guayaquil";
 }
