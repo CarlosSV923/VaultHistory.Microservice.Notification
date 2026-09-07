@@ -4,7 +4,7 @@ public sealed class NotificationWorker(ILogger<NotificationWorker> logger) : Bac
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        logger.LogInformation("Notification worker started. Kafka consumers will be registered in HU-03.");
+        logger.LogInformation("Notification worker started. SlimMessageBus owns the Kafka consumer lifecycle.");
 
         try
         {
