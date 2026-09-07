@@ -67,6 +67,25 @@ public sealed class KafkaContractTests
         Assert.Equal(3, publishBus.Attempts);
     }
 
+    [Fact]
+    public async Task Outbox_result_is_published_with_its_scalar_outbox_id()
+    {
+        var publishBus = new RecordingPublishBus();
+        var publisher = CreatePublisher(publishBus);
+
+        var result = await publisher.PublishOutboxResultAsync(
+            new OutboxNotificationResult("outbox-123", "PROCESSED", null),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        var message = Assert.IsType<UpdateOutboxStatusMessage>(publishBus.Message);
+        Assert.Equal("outbox-123", message.Id);
+        var json = JsonSerializer.Serialize(message, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.Contains("\"id\":\"outbox-123\"", json);
+        Assert.DoesNotContain("ids", json, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("\"status\":\"PROCESSED\"", json);
+    }
+
     private static KafkaNotificationResultPublisher CreatePublisher(RecordingPublishBus publishBus) =>
         new(
             publishBus,

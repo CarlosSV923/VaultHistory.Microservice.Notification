@@ -12,7 +12,7 @@ public sealed class NotifyOutboxConsumer(
 {
     public async Task OnHandle(NotifyOutboxMessage message, CancellationToken cancellationToken)
     {
-        Validate(message.OutboxId, message.UserId, message.Email);
+        ArgumentException.ThrowIfNullOrWhiteSpace(message.OutboxId);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(TimeSpan.FromSeconds(options.Value.ProcessingTimeoutSeconds));
 
@@ -21,12 +21,5 @@ public sealed class NotifyOutboxConsumer(
         {
             throw new InvalidOperationException(result.Error?.Description ?? "Outbox notification workflow failed.");
         }
-    }
-
-    private static void Validate(string outboxId, string userId, string email)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(outboxId);
-        ArgumentException.ThrowIfNullOrWhiteSpace(userId);
-        ArgumentException.ThrowIfNullOrWhiteSpace(email);
     }
 }
