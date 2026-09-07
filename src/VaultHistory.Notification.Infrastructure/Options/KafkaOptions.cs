@@ -10,6 +10,10 @@ public sealed class KafkaOptions
     [Required] public string ClientId { get; init; } = string.Empty;
     [Required] public string GroupId { get; init; } = string.Empty;
     [Required] public KafkaTopicsOptions Topics { get; init; } = new();
+    [Range(1, 300)] public int ProcessingTimeoutSeconds { get; init; } = 60;
+    [Range(1, 10)] public int PublishMaxAttempts { get; init; } = 3;
+    [Range(1, 10)] public int ConsumerMaxAttempts { get; init; } = 3;
+    [Range(1, 60000)] public int RetryDelayMilliseconds { get; init; } = 1000;
 }
 
 public sealed class KafkaTopicsOptions

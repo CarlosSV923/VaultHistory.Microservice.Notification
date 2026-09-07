@@ -1,9 +1,5 @@
 namespace VaultHistory.Notification.Domain.Notifications;
 
-public sealed record NotificationResult(string NotificationId, NotificationStatus Status, string? Error = null);
+public sealed record UserNotificationResult(string UserId, string NotificationStatus, DateTimeOffset? NotificationDate);
 
-public enum NotificationStatus
-{
-    Succeeded,
-    Failed
-}
+public sealed record OutboxNotificationResult(string OutboxId, string Status, string? Error);
