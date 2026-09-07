@@ -21,6 +21,8 @@ The typed History client sends a POST to `History__SubscriptionPath` with the li
 
 Gmail delivery is configured through OAuth refresh-token secrets and sends only with the `gmail.send` scope. The worker does not prompt for OAuth at startup. See [Gmail OAuth setup](docs/gmail-oauth.md) before adding credentials.
 
+Email templates use Fluid/Liquid and live in `src/VaultHistory.Notification.Worker/Templates`. They are copied when the worker is built or published. `Templates__TimeZoneId` controls the explicit time zone shown in sign-in messages (default: `America/Guayaquil`). Rendering templates does not require Google credentials; credentials are only needed when the Gmail sender delivers the rendered HTML.
+
 ## Commands
 
 ```powershell

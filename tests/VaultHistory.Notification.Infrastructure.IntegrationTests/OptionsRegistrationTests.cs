@@ -31,7 +31,8 @@ public sealed class OptionsRegistrationTests
                 ["Gmail:RefreshToken"] = "refresh-token",
                 ["Templates:HistoryTemplatePath"] = "Templates/history.liquid",
                 ["Templates:SignInTemplatePath"] = "Templates/sign-in.liquid",
-                ["Templates:WelcomeTemplatePath"] = "Templates/welcome.liquid"
+                ["Templates:WelcomeTemplatePath"] = "Templates/welcome.liquid",
+                ["Templates:TimeZoneId"] = "America/Guayaquil"
             })
             .Build();
         var services = new ServiceCollection();
