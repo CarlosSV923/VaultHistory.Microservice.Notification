@@ -17,6 +17,8 @@ Kafka uses SlimMessageBus and the `vault-history-notification` consumer group. `
 
 The transport awaits broker confirmation when publishing. A consumer retries a failed message in-process and stops the worker after its bounded attempts, before the default SlimMessageBus handling can advance a failed notification silently. The notification workflows themselves are added in HU-07 and HU-08; until then the transport fails closed if it receives a message.
 
+The typed History client sends a POST to `History__SubscriptionPath` with the literal `History__AuthorizationToken` header and reads `{ "history": "..." }`. It does not retry the POST automatically: a successful request persists generated content in History, and a retry without an idempotency key could create a duplicate story.
+
 ## Commands
 
 ```powershell

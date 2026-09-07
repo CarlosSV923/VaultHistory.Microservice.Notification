@@ -9,6 +9,7 @@ using System.Text.Json;
 using VaultHistory.Notification.Application.Abstractions;
 using VaultHistory.Notification.Application.Contracts;
 using VaultHistory.Notification.Infrastructure.Messaging.Kafka;
+using VaultHistory.Notification.Infrastructure.History;
 using VaultHistory.Notification.Infrastructure.Options;
 
 namespace VaultHistory.Notification.Infrastructure;
@@ -36,6 +37,13 @@ public static class DependencyInjection
             .Bind(configuration.GetSection(TemplatesOptions.SectionName))
             .ValidateDataAnnotations()
             .ValidateOnStart();
+
+        services.AddHttpClient<IHistoryClient, HistoryClient>((serviceProvider, client) =>
+        {
+            var history = serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<HistoryOptions>>().Value;
+            client.BaseAddress = new Uri(history.BaseUrl, UriKind.Absolute);
+            client.Timeout = TimeSpan.FromSeconds(history.TimeoutSeconds);
+        });
 
         var kafka = configuration.GetSection(KafkaOptions.SectionName).Get<KafkaOptions>() ?? new KafkaOptions();
 
