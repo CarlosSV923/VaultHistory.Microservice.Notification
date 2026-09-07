@@ -1,6 +1,5 @@
 using VaultHistory.Notification.Application;
 using VaultHistory.Notification.Infrastructure;
-using VaultHistory.Notification.Worker;
 
 var builder = Host.CreateApplicationBuilder(args);
 builder.Configuration
@@ -11,7 +10,6 @@ builder.Configuration
 
 builder.Services
     .AddApplication()
-    .AddInfrastructure(builder.Configuration)
-    .AddHostedService<NotificationWorker>();
+    .AddInfrastructure(builder.Configuration);
 
 await builder.Build().RunAsync();
