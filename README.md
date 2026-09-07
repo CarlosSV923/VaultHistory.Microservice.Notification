@@ -13,6 +13,10 @@ Background worker responsible for Vault History notifications. This initial vers
 
 `src/VaultHistory.Notification.Worker/Configurations/appsettings.json` declares the four Kafka topics. Supply Kafka, History and Gmail secrets through user secrets or environment variables, for example `Kafka__BootstrapServers`, `History__AuthorizationToken` and `Gmail__RefreshToken`. Startup validation deliberately fails with a clear options error when mandatory configuration is absent.
 
+Kafka uses SlimMessageBus and the `vault-history-notification` consumer group. `NotifyHistory` and `NotifyOutbox` are consumed, while `UpdateUsers` and `UpdateOutbox` receive results. Every output has the contract `{ "id": "...", "data": { ... } }`: `id` is the user ID for user updates and the outbox ID for outbox updates. `Kafka__ProcessingTimeoutSeconds`, `Kafka__PublishMaxAttempts`, `Kafka__ConsumerMaxAttempts` and `Kafka__RetryDelayMilliseconds` control bounded processing and publishing retries.
+
+The transport awaits broker confirmation when publishing. A consumer retries a failed message in-process and stops the worker after its bounded attempts, before the default SlimMessageBus handling can advance a failed notification silently. The notification workflows themselves are added in HU-07 and HU-08; until then the transport fails closed if it receives a message.
+
 ## Commands
 
 ```powershell
