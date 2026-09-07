@@ -23,6 +23,18 @@ Gmail delivery is configured through OAuth refresh-token secrets and sends only 
 
 Email templates use Fluid/Liquid and live in `src/VaultHistory.Notification.Worker/Templates`. They are copied when the worker is built or published. `Templates__TimeZoneId` controls the explicit time zone shown in sign-in messages (default: `America/Guayaquil`). Rendering templates does not require Google credentials; credentials are only needed when the Gmail sender delivers the rendered HTML.
 
+## Docker
+
+La imagen y el entorno conjunto se administran desde [Vault.History.System](https://github.com/CarlosSV923/Vault.History.System). El Compose central conecta este worker con Kafka y History, incluye las plantillas publicadas y permite iniciar el contenedor con credenciales Google placeholder mientras no se procesen mensajes reales.
+
+Después de clonar el repositorio de orquestación con sus submódulos:
+
+```bash
+docker compose up --build -d
+```
+
+Notification no publica puertos HTTP. Su estado se inspecciona mediante `docker compose ps` y `docker compose logs notification`.
+
 ## Commands
 
 ```powershell
