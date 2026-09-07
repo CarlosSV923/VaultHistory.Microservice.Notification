@@ -92,7 +92,6 @@ public static class DependencyInjection
         services.AddTransient<IEmailSender, GmailEmailSender>();
         services.AddTransient<IGmailMessageClient, GmailApiMessageClient>();
         services.AddSingleton<ITemplateRenderer, FluidTemplateRenderer>();
-        services.AddTransient<INotificationWorkflow, DeferredNotificationWorkflow>();
         services.AddTransient(typeof(IKafkaConsumerErrorHandler<>), typeof(NotificationKafkaConsumerErrorHandler<>));
 
         return services;

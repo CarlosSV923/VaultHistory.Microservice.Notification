@@ -12,7 +12,7 @@ public sealed class NotifyHistoryConsumer(
 {
     public async Task OnHandle(NotifyHistoryMessage message, CancellationToken cancellationToken)
     {
-        Validate(message.UserId, message.Email);
+        ArgumentException.ThrowIfNullOrWhiteSpace(message.UserId);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(TimeSpan.FromSeconds(options.Value.ProcessingTimeoutSeconds));
 
@@ -21,11 +21,5 @@ public sealed class NotifyHistoryConsumer(
         {
             throw new InvalidOperationException(result.Error?.Description ?? "History notification workflow failed.");
         }
-    }
-
-    private static void Validate(string userId, string email)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(userId);
-        ArgumentException.ThrowIfNullOrWhiteSpace(email);
     }
 }

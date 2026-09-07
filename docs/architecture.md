@@ -16,6 +16,10 @@ Failures are retried with the configured bounded delay. When retries are exhaust
 
 `IHistoryClient` is implemented by a typed `HttpClient` and calls `POST api/v1/history/generate/subscription`. Its `Authorization` header is the configured token value verbatim, matching the History job-token guard. It maps the notification birthday to a `yyyy-MM-dd` `date` and omits no user identifiers from the required `userId` field. The client does not automatically retry this POST because History persists each generated story and has no idempotency key. It distinguishes request validation, authorization, rate limit, server, network, timeout and invalid-response failures for the notification workflow.
 
+## History notification workflow
+
+`NotificationWorkflow` coordinates the history consumer's use case: validate the incoming data, request a subscription history, render the history template, deliver the HTML and publish `NOTIFIED` for the same `userId`. A failed History request, template render or Gmail delivery skips every later stage and publishes `ERROR` with a null notification date. Result publication has the bounded Kafka retry configured in HU-03; if it cannot be confirmed, the consumer reports a failure instead of acknowledging the incoming message. Unit tests use fakes for all ports, so this workflow neither needs Google credentials nor sends email.
+
 ## Email templates
 
 `FluidTemplateRenderer` parses and caches the three Liquid templates copied with the Worker: generated history, sign-in and welcome. It HTML-encodes user data and generated history, turning each history paragraph into a safe HTML paragraph. Sign-in timestamps are formatted with the configured `Templates:TimeZoneId`, which defaults to `America/Guayaquil`. Template rendering is local and does not need Gmail OAuth credentials; those are only required by the delivery adapter.
