@@ -47,7 +47,7 @@ dotnet test VaultHistory.Notification.slnx --no-build
 
 Release Please runs when changes reach `main` and can also be started manually from GitHub Actions. It uses Conventional Commits to prepare a release pull request that keeps `CHANGELOG.md`, `version.txt` and the GitHub release tag aligned.
 
-The `simple` release strategy treats `version.txt` as the service version. `Directory.Build.props` reads that file for every project, so assemblies and published artifacts receive the same version. The initial baseline is `0.1.0`.
+The `simple` release strategy treats `version.txt` as the service version. `Directory.Build.props` reads that file for every project, so assemblies and published artifacts receive the same version. The initial baseline is `1.0.0`.
 
 Use commit prefixes such as `feat:`, `fix:` and `feat!:` (or a `BREAKING CHANGE` footer) to request minor, patch and major increments. After merging a generated release pull request, Release Please creates the corresponding GitHub release and `vX.Y.Z` tag. No registry publication or CI validation is part of this workflow.
 
