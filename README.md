@@ -1,5 +1,7 @@
 # VaultHistory.Microservice.Notification
 
+English documentation: [docs/overview.md](docs/overview.md).
+
 Background worker responsible for Vault History notifications. This initial version establishes the .NET 10 DDD structure and a Generic Host only; it does not expose controllers, HTTP endpoints, Swagger or listening ports.
 
 ## Projects
