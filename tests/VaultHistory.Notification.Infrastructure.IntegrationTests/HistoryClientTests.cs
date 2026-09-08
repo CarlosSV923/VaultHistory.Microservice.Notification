@@ -62,6 +62,21 @@ public sealed class HistoryClientTests
     }
 
     [Fact]
+    public async Task Sends_the_idempotency_key_when_one_is_provided()
+    {
+        HttpRequestMessage? sent = null;
+        var client = CreateClient(async request =>
+        {
+            sent = await CloneAsync(request);
+            return JsonResponse(HttpStatusCode.Created, "{\"history\":\"A story\"}");
+        });
+
+        await client.GenerateSubscriptionAsync(new("user-123", null, null, null, "user-123:2026"), CancellationToken.None);
+
+        Assert.Contains("\"idempotencyKey\":\"user-123:2026\"", await sent!.Content!.ReadAsStringAsync());
+    }
+
+    [Fact]
     public async Task Classifies_invalid_json_and_empty_history()
     {
         var invalidJsonClient = CreateClient(_ => Task.FromResult(JsonResponse(HttpStatusCode.Created, "{not-json")));

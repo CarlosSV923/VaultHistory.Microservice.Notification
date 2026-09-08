@@ -6,4 +6,5 @@ public sealed record NotifyHistoryMessage(
     string Fullname,
     DateTimeOffset? BirthDate,
     string? Theme,
-    string? Character);
+    string? Character,
+    string? NotificationId = null);

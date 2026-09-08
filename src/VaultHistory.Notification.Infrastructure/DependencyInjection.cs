@@ -13,6 +13,7 @@ using VaultHistory.Notification.Infrastructure.History;
 using VaultHistory.Notification.Infrastructure.Gmail;
 using VaultHistory.Notification.Infrastructure.Options;
 using VaultHistory.Notification.Infrastructure.Templates;
+using VaultHistory.Notification.Infrastructure.Checkpoints;
 
 namespace VaultHistory.Notification.Infrastructure;
 
@@ -89,6 +90,7 @@ public static class DependencyInjection
         });
 
         services.AddTransient<INotificationResultPublisher, KafkaNotificationResultPublisher>();
+        services.AddSingleton<INotificationCheckpointStore, PostgresNotificationCheckpointStore>();
         services.AddTransient<IEmailSender, GmailEmailSender>();
         services.AddTransient<IGmailMessageClient, GmailApiMessageClient>();
         services.AddSingleton<ITemplateRenderer, FluidTemplateRenderer>();
