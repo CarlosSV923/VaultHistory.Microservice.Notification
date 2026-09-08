@@ -11,7 +11,8 @@ public sealed class NotificationWorkflow(
     ITemplateRenderer templateRenderer,
     IEmailSender emailSender,
     INotificationResultPublisher resultPublisher,
-    TimeProvider timeProvider) : INotificationWorkflow
+    TimeProvider timeProvider,
+    INotificationCheckpointStore? checkpointStore = null) : INotificationWorkflow
 {
     public async Task<Result> HandleHistoryAsync(NotifyHistoryMessage message, CancellationToken cancellationToken)
     {
@@ -23,10 +24,22 @@ public sealed class NotificationWorkflow(
                 : await PublishErrorAsync(message.UserId, cancellationToken);
         }
 
-        var history = await GenerateHistoryAsync(message, cancellationToken);
-        if (!history.IsSuccess)
+        var notificationId = string.IsNullOrWhiteSpace(message.NotificationId) ? message.UserId : message.NotificationId;
+        NotificationCheckpoint? checkpoint;
+        try { checkpoint = checkpointStore is null ? null : await checkpointStore.GetAsync(notificationId, cancellationToken); }
+        catch (Exception exception) { return Result.Failure(new Error("checkpoints.unavailable", exception.Message)); }
+        if (checkpoint?.ResultPublishedAt is not null) return Result.Success();
+
+        var history = checkpoint?.Story is { Length: > 0 }
+            ? Result<string>.Success(checkpoint.Story)
+            : await GenerateHistoryAsync(message, cancellationToken);
+        if (!history.IsSuccess) return await PublishErrorAsync(message.UserId, cancellationToken);
+        checkpoint ??= new NotificationCheckpoint(notificationId, message.UserId, null, null, null);
+        if (checkpoint.Story is null && checkpointStore is not null)
         {
-            return await PublishErrorAsync(message.UserId, cancellationToken);
+            checkpoint = checkpoint with { Story = history.Value };
+            var saved = await SaveCheckpointAsync(checkpoint, cancellationToken);
+            if (!saved.IsSuccess) return saved;
         }
 
         var template = await RenderHistoryAsync(message, history.Value!, cancellationToken);
@@ -35,15 +48,29 @@ public sealed class NotificationWorkflow(
             return await PublishErrorAsync(message.UserId, cancellationToken);
         }
 
-        var email = await SendEmailAsync(message.Email, "Tu historia de Vault History", template.Value!, cancellationToken);
+        var email = checkpoint.EmailSentAt is null
+            ? await SendEmailAsync(message.Email, "Tu historia de Vault History", template.Value!, cancellationToken)
+            : Result.Success();
         if (!email.IsSuccess)
         {
             return await PublishErrorAsync(message.UserId, cancellationToken);
         }
 
-        return await resultPublisher.PublishUserResultAsync(
+        if (checkpoint.EmailSentAt is null && checkpointStore is not null)
+        {
+            checkpoint = checkpoint with { EmailSentAt = timeProvider.GetUtcNow() };
+            var saved = await SaveCheckpointAsync(checkpoint, cancellationToken);
+            if (!saved.IsSuccess) return saved;
+        }
+        var published = await resultPublisher.PublishUserResultAsync(
             new UserNotificationResult(message.UserId, "NOTIFIED", timeProvider.GetUtcNow()),
             cancellationToken);
+        if (published.IsSuccess && checkpointStore is not null)
+        {
+            var saved = await SaveCheckpointAsync(checkpoint with { ResultPublishedAt = timeProvider.GetUtcNow() }, cancellationToken);
+            if (!saved.IsSuccess) return saved;
+        }
+        return published;
     }
 
     public async Task<Result> HandleOutboxAsync(NotifyOutboxMessage message, CancellationToken cancellationToken)
@@ -94,7 +121,7 @@ public sealed class NotificationWorkflow(
         try
         {
             return await historyClient.GenerateSubscriptionAsync(
-                new GenerateSubscriptionHistoryRequest(message.UserId, message.BirthDate, message.Theme, message.Character),
+                new GenerateSubscriptionHistoryRequest(message.UserId, message.BirthDate, message.Theme, message.Character, message.NotificationId),
                 cancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
@@ -139,6 +166,19 @@ public sealed class NotificationWorkflow(
         catch (Exception exception) when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
             return Result.Failure(new Error("gmail.unexpected_failure", exception.Message));
+        }
+    }
+
+    private async Task<Result> SaveCheckpointAsync(NotificationCheckpoint checkpoint, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await checkpointStore!.SaveAsync(checkpoint, cancellationToken);
+            return Result.Success();
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        {
+            return Result.Failure(new Error("checkpoints.unavailable", exception.Message));
         }
     }
 

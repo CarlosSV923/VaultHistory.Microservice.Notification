@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using VaultHistory.Notification.Application.Abstractions;
@@ -31,7 +32,8 @@ public sealed class HistoryClient(
                     request.UserId,
                     request.BirthDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
                     request.Theme,
-                    request.Character),
+                    request.Character,
+                    request.IdempotencyKey),
                 options: JsonOptions)
         };
         httpRequest.Headers.TryAddWithoutValidation("Authorization", settings.AuthorizationToken);
@@ -77,7 +79,12 @@ public sealed class HistoryClient(
         _ => new Error("history.http_error", $"History returned HTTP {(int)statusCode}.")
     };
 
-    private sealed record GenerateSubscriptionHistoryBody(string UserId, string? Date, string? Theme, string? Character);
+    private sealed record GenerateSubscriptionHistoryBody(
+        string UserId,
+        string? Date,
+        string? Theme,
+        string? Character,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? IdempotencyKey);
 
     private sealed record GenerateSubscriptionHistoryResponse(string? History);
 }

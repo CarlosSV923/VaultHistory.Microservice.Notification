@@ -51,6 +51,30 @@ public sealed class NotificationWorkflowTests
         Assert.Equal(new DateTimeOffset(2026, 9, 7, 12, 30, 0, TimeSpan.Zero), notification.NotificationDate);
     }
 
+    [Fact]
+    public async Task Reuses_persisted_stages_when_a_history_message_is_redelivered()
+    {
+        var history = new RecordingHistoryClient(Result<string>.Success("Story that must not be regenerated"));
+        var sender = new RecordingEmailSender(Result.Success());
+        var checkpointStore = new InMemoryCheckpointStore();
+        var workflow = new NotificationWorkflow(
+            history,
+            new RecordingTemplateRenderer(Result<string>.Success("<p>Story</p>")),
+            sender,
+            new RecordingResultPublisher(Result.Failure(new Error("kafka.unavailable", "Temporary failure."))),
+            new FixedTimeProvider(new DateTimeOffset(2026, 9, 7, 12, 30, 0, TimeSpan.Zero)),
+            checkpointStore);
+        var message = Message with { NotificationId = "user-123:2026" };
+
+        var first = await workflow.HandleHistoryAsync(message, CancellationToken.None);
+        var second = await workflow.HandleHistoryAsync(message, CancellationToken.None);
+
+        Assert.False(first.IsSuccess);
+        Assert.False(second.IsSuccess);
+        Assert.Equal(1, history.CallCount);
+        Assert.Equal(1, sender.CallCount);
+    }
+
     [Theory]
     [InlineData("history.unavailable", "history")]
     [InlineData("templates.invalid_template", "template")]
@@ -279,6 +303,20 @@ public sealed class NotificationWorkflowTests
         {
             OutboxResults.Add(notificationResult);
             return Task.FromResult(result);
+        }
+    }
+
+    private sealed class InMemoryCheckpointStore : INotificationCheckpointStore
+    {
+        private readonly Dictionary<string, NotificationCheckpoint> _checkpoints = [];
+
+        public Task<NotificationCheckpoint?> GetAsync(string notificationId, CancellationToken cancellationToken) =>
+            Task.FromResult(_checkpoints.GetValueOrDefault(notificationId));
+
+        public Task SaveAsync(NotificationCheckpoint checkpoint, CancellationToken cancellationToken)
+        {
+            _checkpoints[checkpoint.NotificationId] = checkpoint;
+            return Task.CompletedTask;
         }
     }
 
