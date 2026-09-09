@@ -20,7 +20,11 @@ public sealed class KafkaNotificationResultPublisher(
         return PublishAsync(
             new UpdateUserNotificationMessage(
                 notificationResult.UserId,
-                new UpdateUserNotificationData(notificationResult.NotificationStatus, notificationResult.NotificationDate)),
+                new UpdateUserNotificationData(
+                    notificationResult.NotificationStatus,
+                    notificationResult.NotificationDate,
+                    notificationResult.FailureStage,
+                    notificationResult.FailureReason)),
             cancellationToken);
     }
 
@@ -31,7 +35,10 @@ public sealed class KafkaNotificationResultPublisher(
         return PublishAsync(
             new UpdateOutboxStatusMessage(
                 notificationResult.OutboxId,
-                new UpdateOutboxStatusData(notificationResult.Status, notificationResult.Error)),
+                new UpdateOutboxStatusData(
+                    notificationResult.Status,
+                    notificationResult.Error,
+                    notificationResult.FailureStage)),
             cancellationToken);
     }
 
