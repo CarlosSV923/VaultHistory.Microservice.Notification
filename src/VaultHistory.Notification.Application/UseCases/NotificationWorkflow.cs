@@ -21,7 +21,7 @@ public sealed class NotificationWorkflow(
         {
             return string.IsNullOrWhiteSpace(message.UserId)
                 ? Result.Failure(validationError)
-                : await PublishErrorAsync(message.UserId, cancellationToken);
+                : await PublishErrorAsync(message.UserId, validationError, cancellationToken);
         }
 
         var notificationId = string.IsNullOrWhiteSpace(message.NotificationId) ? message.UserId : message.NotificationId;
@@ -33,7 +33,7 @@ public sealed class NotificationWorkflow(
         var history = checkpoint?.Story is { Length: > 0 }
             ? Result<string>.Success(checkpoint.Story)
             : await GenerateHistoryAsync(message, cancellationToken);
-        if (!history.IsSuccess) return await PublishErrorAsync(message.UserId, cancellationToken);
+        if (!history.IsSuccess) return await PublishErrorAsync(message.UserId, history.Error!, cancellationToken);
         checkpoint ??= new NotificationCheckpoint(notificationId, message.UserId, null, null, null);
         if (checkpoint.Story is null && checkpointStore is not null)
         {
@@ -45,7 +45,7 @@ public sealed class NotificationWorkflow(
         var template = await RenderHistoryAsync(message, history.Value!, cancellationToken);
         if (!template.IsSuccess)
         {
-            return await PublishErrorAsync(message.UserId, cancellationToken);
+            return await PublishErrorAsync(message.UserId, template.Error!, cancellationToken);
         }
 
         var email = checkpoint.EmailSentAt is null
@@ -53,7 +53,7 @@ public sealed class NotificationWorkflow(
             : Result.Success();
         if (!email.IsSuccess)
         {
-            return await PublishErrorAsync(message.UserId, cancellationToken);
+            return await PublishErrorAsync(message.UserId, email.Error!, cancellationToken);
         }
 
         if (checkpoint.EmailSentAt is null && checkpointStore is not null)
@@ -106,15 +106,28 @@ public sealed class NotificationWorkflow(
             cancellationToken);
     }
 
-    private async Task<Result> PublishErrorAsync(string userId, CancellationToken cancellationToken) =>
+    private async Task<Result> PublishErrorAsync(string userId, Error error, CancellationToken cancellationToken) =>
         await resultPublisher.PublishUserResultAsync(
-            new UserNotificationResult(userId, "ERROR", null),
+            new UserNotificationResult(
+                userId,
+                IsSafeToRetry(error) ? "PENDING" : "ERROR",
+                null,
+                ToSafeErrorCode(error.Code),
+                ToSafeErrorCode(error.Code)),
             cancellationToken);
 
     private async Task<Result> PublishOutboxErrorAsync(string outboxId, Error error, CancellationToken cancellationToken) =>
         await resultPublisher.PublishOutboxResultAsync(
-            new OutboxNotificationResult(outboxId, "ERROR", ToSafeErrorCode(error.Code)),
+            new OutboxNotificationResult(
+                outboxId,
+                "ERROR",
+                ToSafeErrorCode(error.Code),
+                ToSafeErrorCode(error.Code)),
             cancellationToken);
+
+    private static bool IsSafeToRetry(Error error) => error.Code is
+        "history.timeout" or "history.unavailable" or "history.server_error" or "history.rate_limited" or
+        "history.unexpected_failure" or "templates.unexpected_failure";
 
     private async Task<Result<string>> GenerateHistoryAsync(NotifyHistoryMessage message, CancellationToken cancellationToken)
     {

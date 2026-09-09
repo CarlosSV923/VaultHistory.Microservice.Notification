@@ -100,8 +100,9 @@ public sealed class NotificationWorkflowTests
         Assert.Equal(failedStage == "history" ? 0 : 1, renderer.CallCount);
         Assert.Equal(failedStage is "history" or "template" ? 0 : 1, sender.CallCount);
         var notification = Assert.Single(publisher.UserResults);
-        Assert.Equal("ERROR", notification.NotificationStatus);
+        Assert.Equal(errorCode == "history.unavailable" ? "PENDING" : "ERROR", notification.NotificationStatus);
         Assert.Null(notification.NotificationDate);
+        Assert.Equal(errorCode.ToUpperInvariant().Replace('.', '_'), notification.FailureStage);
     }
 
     [Fact]
