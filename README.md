@@ -1,43 +1,70 @@
 # VaultHistory.Microservice.Notification
 
-English documentation: [docs/overview.md](docs/overview.md).
+`VaultHistory.Microservice.Notification` is the background worker that turns Vault History events into email notifications. It is a .NET 10 Generic Host: it has no HTTP endpoints, Swagger surface, or listening port.
 
-Background worker responsible for Vault History notifications. This initial version establishes the .NET 10 DDD structure and a Generic Host only; it does not expose controllers, HTTP endpoints, Swagger or listening ports.
+The worker consumes Kafka work, generates subscription stories when required, renders safe Fluid/Liquid email HTML, delivers through Gmail, and publishes correlated outcomes for User and Jobs.
 
-## Projects
+## Architecture
 
-- `Domain`: provider-independent results and notification types.
-- `Application`: use-case boundaries and provider ports.
-- `Infrastructure`: configuration and future provider adapters.
-- `Worker`: Generic Host startup and future Kafka consumers.
+![Notification microservice architecture](docs/architecture/notification-architecture.png)
 
-## Configuration
+*The architecture shows the two Kafka inputs, the History and Outbox paths, checkpoint persistence, Gmail delivery, and the two correlated Kafka outputs.*
 
-`src/VaultHistory.Notification.Worker/Configurations/appsettings.json` declares the four Kafka topics. Supply Kafka, History and Gmail secrets through user secrets or environment variables, for example `Kafka__BootstrapServers`, `History__AuthorizationToken` and `Gmail__RefreshToken`. Startup validation deliberately fails with a clear options error when mandatory configuration is absent.
+- [Open the interactive architecture](docs/architecture/notification-architecture.html)
+- [Edit the architecture source](docs/architecture/notification-architecture.json)
+- [Read focused implementation notes](docs/architecture.md)
 
-Kafka uses SlimMessageBus and the `vault-history-notification` consumer group. `NotifyHistory` and `NotifyOutbox` are consumed, while `UpdateUsers` and `UpdateOutbox` receive results. Every output has the contract `{ "id": "...", "data": { ... } }`: `id` is the user ID for user updates and the outbox ID for outbox updates. `Kafka__ProcessingTimeoutSeconds`, `Kafka__PublishMaxAttempts`, `Kafka__ConsumerMaxAttempts` and `Kafka__RetryDelayMilliseconds` control bounded processing and publishing retries.
+### Responsibilities and flow
 
-The transport awaits broker confirmation when publishing. A consumer retries a failed message in-process and stops the worker after its bounded attempts, before the default SlimMessageBus handling can advance a failed notification silently. The history workflow generates the subscription history, renders it, delivers it and then publishes `NOTIFIED`. A History, template or Gmail failure publishes `ERROR` with a null notification date. The outbox workflow renders `UserSignedInEvent` messages with the sign-in template and `CreateUserEvent` messages with the welcome template, then publishes `PROCESSED` or an `ERROR` tied to the original outbox ID.
+- `notify-history-topic` starts a subscription-history notification. The worker validates the message, reads its PostgreSQL checkpoint, calls the History API when a story has not already been saved, renders the history template, sends the email, and publishes a user result.
+- `notify-outbox-topic` carries user outbox events. Jobs currently routes both `UserSignedInEvent` and `CreateUserEvent`; the worker selects the sign-in or welcome template, sends the email, and publishes an outbox result. Other event types are rejected as unsupported.
+- `update-users-topic` receives user notification results and `update-outbox-topic` receives outbox statuses. Messages use camel-case JSON with the envelope `{ "id": "...", "data": { ... } }`; the Kafka key is the same user or outbox identifier.
 
-The typed History client sends a POST to `History__SubscriptionPath` with the literal `History__AuthorizationToken` header and reads `{ "history": "..." }`. It does not retry the POST automatically: a successful request persists generated content in History, and a retry without an idempotency key could create a duplicate story.
+### Delivery guarantees and recovery
 
-Gmail delivery is configured through OAuth refresh-token secrets and sends only with the `gmail.send` scope. The worker does not prompt for OAuth at startup. See [Gmail OAuth setup](docs/gmail-oauth.md) before adding credentials.
+History notifications keep a PostgreSQL checkpoint keyed by `notificationId` (or `userId` when it is absent). The checkpoint stores the generated story, confirmed Gmail submission, and confirmed Kafka publication. A Kafka redelivery resumes at the last saved stage.
 
-Email templates use Fluid/Liquid and live in `src/VaultHistory.Notification.Worker/Templates`. They are copied when the worker is built or published. `Templates__TimeZoneId` controls the explicit time zone shown in sign-in messages (default: `America/Guayaquil`). Rendering templates does not require Google credentials; credentials are only needed when the Gmail sender delivers the rendered HTML.
+This is an at-least-once flow, not exactly-once email delivery: if the process stops after Gmail accepts the message but before the checkpoint is saved, a redelivery can send the email again. Safe-to-retry History and template failures publish `PENDING`; other History failures and all Outbox failures publish `ERROR`. Kafka result publishing and consumer handling use bounded retries. When consumer retries are exhausted, the worker stops before an unconfirmed notification can be acknowledged.
 
-## Docker
+## Technology and project structure
 
-La imagen y el entorno conjunto se administran desde [Vault.History.System](https://github.com/CarlosSV923/Vault.History.System). El Compose central conecta este worker con Kafka y History, incluye las plantillas publicadas y permite iniciar el contenedor con credenciales Google placeholder mientras no se procesen mensajes reales.
+- .NET 10 worker with dependency boundaries: `Domain` has no provider dependency; `Application` depends on `Domain`; `Infrastructure` implements provider ports; `Worker` composes the host.
+- SlimMessageBus 3.5 with the Kafka provider for JSON messaging and consumer checkpoints.
+- Typed `HttpClient` for History, Fluid for templates, Gmail API OAuth for delivery, and Npgsql/PostgreSQL for notification checkpoints.
 
-Después de clonar el repositorio de orquestación con sus submódulos:
-
-```bash
-docker compose up --build -d
+```text
+src/
+  VaultHistory.Notification.Domain/          Results and notification domain types
+  VaultHistory.Notification.Application/     Workflow, contracts, and ports
+  VaultHistory.Notification.Infrastructure/  Kafka, History, Gmail, templates, checkpoints
+  VaultHistory.Notification.Worker/          Host startup, configuration, and Liquid templates
+tests/                                       Unit and infrastructure integration tests
+docs/                                        Architecture assets and focused OAuth guidance
 ```
 
-Notification no publica puertos HTTP. Su estado se inspecciona mediante `docker compose ps` y `docker compose logs notification`.
+## Prerequisites and configuration
 
-## Commands
+Install the .NET SDK declared in [`global.json`](global.json). The Worker validates required settings when it starts. Keep values out of `appsettings.json`; supply them as .NET user secrets or environment variables.
+
+| Area | Required settings |
+| --- | --- |
+| PostgreSQL checkpoints | `ConnectionStrings__DefaultConnection` |
+| Kafka | `Kafka__BootstrapServers`, plus the configured group, topics, processing timeout, and retry settings |
+| History | `History__BaseUrl`, `History__AuthorizationToken`, and optional `History__SubscriptionPath` / `History__TimeoutSeconds` |
+| Gmail | `Gmail__SenderAddress`, `Gmail__SenderName`, `Gmail__ClientId`, `Gmail__ClientSecret`, and `Gmail__RefreshToken` |
+| Templates | `Templates__HistoryTemplatePath`, `Templates__SignInTemplatePath`, `Templates__WelcomeTemplatePath`, and `Templates__TimeZoneId` |
+
+The default configuration declares the four Kafka topics, uses the `vault-history-notification` consumer group, and formats sign-in timestamps in `America/Guayaquil`. See [Gmail OAuth configuration](docs/gmail-oauth.md) for the one-time refresh-token setup and its `gmail.send` scope.
+
+## Messaging contracts
+
+`NotifyHistoryMessage` contains `userId`, `email`, `fullname`, optional `birthDate`, `theme`, `character`, and optional `notificationId`. The typed History client calls `POST api/v1/history/generate/subscription` with the configured authorization header and forwards `notificationId` as the request idempotency key when it is present. It does not retry the POST itself, because the downstream service persists generated stories.
+
+`NotifyOutboxMessage` contains `outboxId`, `userId`, `email`, `fullname`, optional `birthDate`, `type`, and optional `occurredOn`. `UserSignedInEvent` requires `occurredOn`; `CreateUserEvent` uses the welcome template. All rendered fields are HTML-encoded by Fluid before Gmail delivery.
+
+Successful history delivery publishes `NOTIFIED` with a notification date. Successful outbox delivery publishes `PROCESSED`. Error results include a sanitized failure code and preserve the original user or outbox correlation ID.
+
+## Run and test locally
 
 ```powershell
 dotnet restore VaultHistory.Notification.slnx
@@ -45,17 +72,23 @@ dotnet build VaultHistory.Notification.slnx --no-restore
 dotnet test VaultHistory.Notification.slnx --no-build
 ```
 
-## Releases
+Template rendering, compilation, and tests that use fakes do not send real email or require Gmail credentials. A real Kafka broker, History API, PostgreSQL checkpoint database, and Gmail secrets are required to process live notifications.
 
-Release Please runs when changes reach `main` and can also be started manually from GitHub Actions. It uses Conventional Commits to prepare a release pull request that keeps `CHANGELOG.md`, `version.txt` and the GitHub release tag aligned.
+The service image and the multi-service environment are orchestrated by [Vault.History.System](https://github.com/CarlosSV923/Vault.History.System). From that repository's checkout, use:
 
-The `simple` release strategy treats `version.txt` as the service version. `Directory.Build.props` reads that file for every project, so assemblies and published artifacts receive the same version. The initial baseline is `1.0.0`.
+```powershell
+docker compose up --build -d
+docker compose ps
+docker compose logs notification
+```
 
-Use commit prefixes such as `feat:`, `fix:` and `feat!:` (or a `BREAKING CHANGE` footer) to request minor, patch and major increments. After merging a generated release pull request, Release Please creates the corresponding GitHub release and `vX.Y.Z` tag. No registry publication or CI validation is part of this workflow.
+Notification itself exposes no HTTP port.
 
-For the first release:
+## Releases and related documentation
 
-1. Merge changes that use Conventional Commits into `develop`, then promote `develop` to `main`.
-2. Wait for the Release Please workflow to create or update its release pull request against `main`. It can be started with `workflow_dispatch` if a manual run is needed.
-3. Review the proposed `CHANGELOG.md` and `version.txt` changes in that pull request.
-4. Merge the release pull request. The next workflow run creates the GitHub release and matching version tag.
+Release Please runs for changes promoted to `main` and keeps `CHANGELOG.md`, `version.txt`, and the release tag aligned through Conventional Commits. It is not a CI validation pipeline.
+
+- [Gmail OAuth configuration](docs/gmail-oauth.md)
+- [Architecture implementation notes](docs/architecture.md)
+- [Vault.History.System orchestration repository](https://github.com/CarlosSV923/Vault.History.System)
+- [Vault History project](https://github.com/users/CarlosSV923/projects/3)
