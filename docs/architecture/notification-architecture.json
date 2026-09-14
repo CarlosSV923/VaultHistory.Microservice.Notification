@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Notification Microservice Architecture",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "output": "notification-architecture.html",
+    "viewBox": [1200, 680],
+    "views": [
+      {
+        "id": "history-notification",
+        "label": "History notification",
+        "focus": ["kafka-entrada", "worker", "workflow", "history", "templates", "gmail", "checkpoints", "publisher", "kafka-salida"],
+        "note": "A history request generates content, saves its delivery stages, and publishes a correlated result."
+      },
+      {
+        "id": "outbox-notification",
+        "label": "Outbox notification",
+        "focus": ["kafka-entrada", "worker", "workflow", "templates", "gmail", "publisher", "kafka-salida"],
+        "note": "An outbox event selects a template, delivers the email, and updates its own status."
+      }
+    ]
+  },
+  "components": [
+    { "id": "kafka-entrada", "type": "messagebus", "label": "Apache Kafka", "sublabel": "notify-history and notify-outbox", "pos": [38, 300], "size": [174, 68] },
+    { "id": "worker", "type": "backend", "label": "Notification Worker", "sublabel": ".NET Generic Host", "pos": [264, 300], "size": [174, 68] },
+    { "id": "workflow", "type": "backend", "label": "NotificationWorkflow", "sublabel": "validation and routing", "pos": [490, 300], "size": [190, 68] },
+    { "id": "history", "type": "backend", "label": "History API", "sublabel": "typed HTTP client", "pos": [760, 72], "size": [182, 68] },
+    { "id": "templates", "type": "backend", "label": "Fluid templates", "sublabel": "history, sign-in, and welcome", "pos": [760, 226], "size": [182, 68] },
+    { "id": "gmail", "type": "external", "label": "Gmail API", "sublabel": "OAuth delivery with gmail.send", "pos": [760, 380], "size": [182, 68] },
+    { "id": "checkpoints", "type": "database", "label": "PostgreSQL", "sublabel": "notification checkpoints", "pos": [490, 520], "size": [190, 68] },
+    { "id": "publisher", "type": "backend", "label": "Result publisher", "sublabel": "Kafka acknowledgement with retries", "pos": [760, 520], "size": [182, 68] },
+    { "id": "kafka-salida", "type": "messagebus", "label": "Apache Kafka", "sublabel": "update-users and update-outbox", "pos": [986, 520], "size": [176, 68] }
+  ],
+  "connections": [
+    { "id": "consume", "from": "kafka-entrada", "to": "worker", "label": "consumes work", "variant": "emphasis", "labelDy": -28 },
+    { "id": "dispatch", "from": "worker", "to": "workflow", "label": "dispatches use cases", "variant": "emphasis", "labelDy": -28 },
+    { "id": "generate-history", "from": "workflow", "to": "history", "label": "subscription POST (History only)", "fromSide": "right", "toSide": "left" },
+    { "id": "render", "from": "workflow", "to": "templates", "label": "renders safe HTML", "fromSide": "right", "toSide": "left", "labelDx": -140 },
+    { "id": "deliver", "from": "workflow", "to": "gmail", "label": "sends email", "variant": "security", "fromSide": "right", "toSide": "left" },
+    { "id": "checkpoint", "from": "workflow", "to": "checkpoints", "label": "reads and saves stages (History only)", "fromSide": "bottom", "toSide": "top", "labelAt": [430, 400] },
+    { "id": "publish-result", "from": "workflow", "to": "publisher", "label": "NOTIFIED, PENDING, ERROR, or PROCESSED result", "fromSide": "bottom", "toSide": "top" },
+    { "id": "broker-confirmation", "from": "publisher", "to": "kafka-salida", "label": "publishes confirmed result", "variant": "emphasis", "labelDy": -28 }
+  ],
+  "cards": [
+    { "dot": "violet", "title": "Two inputs, two outputs", "items": ["History generates a story; Outbox uses an event template.", "Results correlate by userId or outboxId."] },
+    { "dot": "cyan", "title": "History resumption", "items": ["Checkpoint stores story, email, and publication.", "Redelivery resumes from the last saved stage."] },
+    { "dot": "emerald", "title": "Operational guarantees", "items": ["Publisher retries before returning a failure.", "Consumer stops after unconfirmed retries."] }
+  ]
+}
